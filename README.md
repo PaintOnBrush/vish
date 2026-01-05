@@ -14,18 +14,18 @@ vish is a tiny helper script to quickly create or edit small executable shell sc
 
 ## Installation
 
-1. Copy `bin/vish` to a directory in your PATH, e.g. `/usr/local/bin` (or let the script create it under `$PREFIX/local/bin`).
+1. Copy `vish` to a directory in your PATH, e.g. `/usr/local/bin` (or let the script create it under `$PREFIX/local/bin`).
 2. Make it executable:
    - chmod +x /usr/local/bin/vish
 
 Or, from this repository root:
 
 - Option A (install to /usr/local/bin):
-  - sudo cp bin/vish /usr/local/bin/vish
+  - sudo cp vish /usr/local/bin/vish
   - sudo chmod +x /usr/local/bin/vish
 
 - Option B (Termux install):
-  - cp bin/vish "$PREFIX/local/bin/vish"
+  - cp vish "$PREFIX/local/bin/vish"
   - chmod +x "$PREFIX/local/bin/vish"
 
 ## Usage
