@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-# cash - Quickly cat the source of a command/script
-
-set -euo pipefail  # Better safety: exit on error, undefined var, pipe failure
+set -euo pipefail
 
 SCRIPT_NAME="$(basename "$0")"
 
@@ -11,56 +9,63 @@ show_help() {
 Usage: $SCRIPT_NAME <command>
        $SCRIPT_NAME -h | --help
 
-Display the contents of the script or executable that implements <command>.
+Display the source code of a command/script if it is a readable text file (e.g., shell, Python, Perl script).
+
+Refuses to display compiled binaries to avoid garbled terminal output.
 
 Examples:
-  $SCRIPT_NAME ls          # Show the source of the 'ls' command
-  $SCRIPT_NAME cash        # Show this script itself
-  $SCRIPT_NAME my-script   # Show a script in your PATH
+  $SCRIPT_NAME cash        # Show this script
+  $SCRIPT_NAME my-script   # Show a script in PATH
+  $SCRIPT_NAME ls          # Warn: ls is a binary
 
 Options:
   -h, --help    Show this help message and exit
 EOF
 }
 
-# Check for help flags first
-if [[ $# -eq 1 ]]; then
-    case "$1" in
-        -h|--help)
-            show_help
-            exit 0
-            ;;
-    esac
+# Handle help first
+if [[ $# -eq 1 && ("$1" == "-h" || "$1" == "--help") ]]; then
+    show_help
+    exit 0
 fi
 
-# Require exactly one argument (the command name)
 if [[ $# -ne 1 ]]; then
-    echo "Error: Exactly one command name is required." >&2
-    echo "Try '$SCRIPT_NAME --help' for more information." >&2
+    echo "Error: Exactly one command name required." >&2
+    echo "Try '$SCRIPT_NAME --help' for usage." >&2
     exit 1
 fi
 
 COMMAND="$1"
-
-# Find the full path to the command
-COMMAND_PATH="$(which "$COMMAND" 2>/dev/null || true)"
-
-if [[ -z "$COMMAND_PATH" ]]; then
+COMMAND_PATH="$(which "$COMMAND" 2>/dev/null)" || {
     echo "Error: '$COMMAND' not found in PATH." >&2
     exit 1
-fi
+}
 
-# Check if it's readable (scripts/binaries we can cat)
-if [[ ! -r "$COMMAND_PATH" ]]; then
-    echo "Error: '$COMMAND' found at $COMMAND_PATH but is not readable." >&2
+if [[ ! -f "$COMMAND_PATH" ]]; then
+    echo "Error: '$COMMAND_PATH' is not a regular file." >&2
     exit 1
 fi
 
-# If it's a readable file, display it
-if [[ -f "$COMMAND_PATH" ]]; then
+if [[ ! -r "$COMMAND_PATH" ]]; then
+    echo "Error: '$COMMAND_PATH' is not readable." >&2
+    exit 1
+fi
+
+# Detect if it's a text file using `file`
+if file -b --mime-type "$COMMAND_PATH" | grep -qE '^text/|^application/x-shellscript|^inode/x-empty|^application/x-empty'; then
     echo "# Source of '$COMMAND' ($COMMAND_PATH):"
+    echo
+    cat "$COMMAND_PATH"
+elif file "$COMMAND_PATH" | grep -qE 'script|interpreted'; then
+    # Some scripts are detected as "data" but file mentions "script"
+    echo "# Source of '$COMMAND' ($COMMAND_PATH):"
+    echo
     cat "$COMMAND_PATH"
 else
-    echo "Error: '$COMMAND_PATH' is not a regular file." >&2
+    echo "'$COMMAND' is a compiled binary or non-text file."
+    echo "Displaying it would produce garbage and could mess up your terminal."
+    echo "Location: $COMMAND_PATH"
+    echo
+    echo "Tip: Use 'file \"$COMMAND_PATH\"' or 'objdump -h \"$COMMAND_PATH\"' for more info."
     exit 1
 fi
