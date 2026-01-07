@@ -1,3 +1,66 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-[ $1 ] && cat `which $1`
+# cash - Quickly cat the source of a command/script
+
+set -euo pipefail  # Better safety: exit on error, undefined var, pipe failure
+
+SCRIPT_NAME="$(basename "$0")"
+
+show_help() {
+    cat << EOF
+Usage: $SCRIPT_NAME <command>
+       $SCRIPT_NAME -h | --help
+
+Display the contents of the script or executable that implements <command>.
+
+Examples:
+  $SCRIPT_NAME ls          # Show the source of the 'ls' command
+  $SCRIPT_NAME cash        # Show this script itself
+  $SCRIPT_NAME my-script   # Show a script in your PATH
+
+Options:
+  -h, --help    Show this help message and exit
+EOF
+}
+
+# Check for help flags first
+if [[ $# -eq 1 ]]; then
+    case "$1" in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+    esac
+fi
+
+# Require exactly one argument (the command name)
+if [[ $# -ne 1 ]]; then
+    echo "Error: Exactly one command name is required." >&2
+    echo "Try '$SCRIPT_NAME --help' for more information." >&2
+    exit 1
+fi
+
+COMMAND="$1"
+
+# Find the full path to the command
+COMMAND_PATH="$(which "$COMMAND" 2>/dev/null || true)"
+
+if [[ -z "$COMMAND_PATH" ]]; then
+    echo "Error: '$COMMAND' not found in PATH." >&2
+    exit 1
+fi
+
+# Check if it's readable (scripts/binaries we can cat)
+if [[ ! -r "$COMMAND_PATH" ]]; then
+    echo "Error: '$COMMAND' found at $COMMAND_PATH but is not readable." >&2
+    exit 1
+fi
+
+# If it's a readable file, display it
+if [[ -f "$COMMAND_PATH" ]]; then
+    echo "# Source of '$COMMAND' ($COMMAND_PATH):"
+    cat "$COMMAND_PATH"
+else
+    echo "Error: '$COMMAND_PATH' is not a regular file." >&2
+    exit 1
+fi
