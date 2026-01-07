@@ -6,29 +6,50 @@ SCRIPT_NAME="$(basename "$0")"
 
 show_help() {
     cat << EOF
-Usage: $SCRIPT_NAME <command>
+Usage: $SCRIPT_NAME [-f | --force] <command>
        $SCRIPT_NAME -h | --help
 
-Display the source code of a command/script if it is a readable text file (e.g., shell, Python, Perl script).
+Display the source code of a command/script if it is a text file.
 
-Refuses to display compiled binaries to avoid garbled terminal output.
-
-Examples:
-  $SCRIPT_NAME cash        # Show this script
-  $SCRIPT_NAME my-script   # Show a script in PATH
-  $SCRIPT_NAME ls          # Warn: ls is a binary
+By default, refuses to display compiled binaries to prevent garbled terminal output.
 
 Options:
-  -h, --help    Show this help message and exit
+  -f, --force      Force display even if the file is binary (may mess up terminal)
+  -h, --help       Show this help message and exit
+
+Examples:
+  $SCRIPT_NAME cash          # Show this script (safe)
+  $SCRIPT_NAME ls            # Warn: ls is binary
+  $SCRIPT_NAME -f ls         # Force display ls binary (dangerous!)
 EOF
 }
 
-# Handle help first
-if [[ $# -eq 1 && ("$1" == "-h" || "$1" == "--help") ]]; then
-    show_help
-    exit 0
-fi
+# Default: do not force
+FORCE=0
 
+# Parse options
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -f|--force)
+            FORCE=1
+            shift
+            ;;
+        -*)
+            echo "Error: Unknown option: $1" >&2
+            echo "Try '$SCRIPT_NAME --help' for usage." >&2
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+# After option parsing, exactly one command name should remain
 if [[ $# -ne 1 ]]; then
     echo "Error: Exactly one command name required." >&2
     echo "Try '$SCRIPT_NAME --help' for usage." >&2
@@ -51,21 +72,32 @@ if [[ ! -r "$COMMAND_PATH" ]]; then
     exit 1
 fi
 
-# Detect if it's a text file using `file`
-if file -b --mime-type "$COMMAND_PATH" | grep -qE '^text/|^application/x-shellscript|^inode/x-empty|^application/x-empty'; then
-    echo "# Source of '$COMMAND' ($COMMAND_PATH):"
-    echo
-    cat "$COMMAND_PATH"
-elif file "$COMMAND_PATH" | grep -qE 'script|interpreted'; then
-    # Some scripts are detected as "data" but file mentions "script"
+# Check if it's likely a text/script file
+is_text_file() {
+    # Use MIME type first
+    if file -b --mime-type "$COMMAND_PATH" | grep -qE '^text/|^application/x-shellscript|^inode/x-empty|^application/x-empty'; then
+        return 0
+    fi
+    # Fallback: look for "script" in file description (catches many interpreted scripts)
+    if file "$COMMAND_PATH" | grep -qiE 'script|interpreted'; then
+        return 0
+    fi
+    return 1
+}
+
+if is_text_file || [[ $FORCE -eq 1 ]]; then
     echo "# Source of '$COMMAND' ($COMMAND_PATH):"
     echo
     cat "$COMMAND_PATH"
 else
-    echo "'$COMMAND' is a compiled binary or non-text file."
-    echo "Displaying it would produce garbage and could mess up your terminal."
+    echo "'$COMMAND' appears to be a compiled binary or non-text file."
+    echo "Displaying it with 'cat' would produce garbage and could mess up your terminal."
+    echo
     echo "Location: $COMMAND_PATH"
     echo
-    echo "Tip: Use 'file \"$COMMAND_PATH\"' or 'objdump -h \"$COMMAND_PATH\"' for more info."
+    echo "To force display anyway (not recommended), use:"
+    echo "  $SCRIPT_NAME -f $COMMAND"
+    echo
+    echo "Tip: Use 'file \"$COMMAND_PATH\"' to inspect the file type."
     exit 1
 fi
