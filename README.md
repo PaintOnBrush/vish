@@ -50,6 +50,128 @@ Examples:
   - vish temp
   - Save without adding content — the script will be removed.
 
+## Companion tool: cash
+
+Once you have `vish`, a great companion command is **`cash`** — a safe way to view the source code of any command in your PATH (perfect for inspecting scripts you created with `vish`).
+
+`cash` shows the script source for text-based commands, refuses to dump binaries by default (to avoid garbling your terminal), and has a `-f/--force` flag if you really need to view a binary.
+
+### Quick install & create cash with vish itself
+
+```bash
+vish cash
+```
+
+Then paste the full script code (from below) into the editor, save, and exit. `vish` will make it executable automatically.
+
+```bash
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_NAME="$(basename "$0")"
+
+show_help() {
+    cat << EOF
+Usage: $SCRIPT_NAME [-f | --force] <command>
+       $SCRIPT_NAME -h | --help
+
+Display the source code of a command/script if it is a text file.
+
+By default, refuses to display compiled binaries to prevent garbled terminal output.
+
+Options:
+  -f, --force      Force display even if the file is binary (may mess up terminal)
+  -h, --help       Show this help message and exit
+
+Examples:
+  $SCRIPT_NAME cash          # Show this script (safe)
+  $SCRIPT_NAME ls            # Warn: ls is binary
+  $SCRIPT_NAME -f ls         # Force display ls binary (dangerous!)
+EOF
+}
+
+FORCE=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -f|--force)
+            FORCE=1
+            shift
+            ;;
+        -*)
+            echo "Error: Unknown option: $1" >&2
+            echo "Try '$SCRIPT_NAME --help' for usage." >&2
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [[ $# -ne 1 ]]; then
+    echo "Error: Exactly one command name required." >&2
+    echo "Try '$SCRIPT_NAME --help' for usage." >&2
+    exit 1
+fi
+
+COMMAND="$1"
+COMMAND_PATH="$(which "$COMMAND" 2>/dev/null)" || {
+    echo "Error: '$COMMAND' not found in PATH." >&2
+    exit 1
+}
+
+if [[ ! -f "$COMMAND_PATH" ]]; then
+    echo "Error: '$COMMAND_PATH' is not a regular file." >&2
+    exit 1
+fi
+
+if [[ ! -r "$COMMAND_PATH" ]]; then
+    echo "Error: '$COMMAND_PATH' is not readable." >&2
+    exit 1
+fi
+
+is_text_file() {
+    if file -b --mime-type "$COMMAND_PATH" | grep -qE '^text/|^application/x-shellscript|^inode/x-empty|^application/x-empty'; then
+        return 0
+    fi
+    if file "$COMMAND_PATH" | grep -qiE 'script|interpreted'; then
+        return 0
+    fi
+    return 1
+}
+
+if is_text_file || [[ $FORCE -eq 1 ]]; then
+    echo "# Source of '$COMMAND' ($COMMAND_PATH):"
+    echo
+    cat "$COMMAND_PATH"
+else
+    echo "'$COMMAND' appears to be a compiled binary or non-text file."
+    echo "Displaying it with 'cat' would produce garbage and could mess up your terminal."
+    echo
+    echo "Location: $COMMAND_PATH"
+    echo
+    echo "To force display anyway (not recommended), use:"
+    echo "  $SCRIPT_NAME -f $COMMAND"
+    echo
+    echo "Tip: Use 'file \"$COMMAND_PATH\"' to inspect the file type."
+    exit 1
+fi
+```
+
+Now you can do things like:
+
+```bash
+cash cash     # view the cash script itself
+cash greet    # view the greet helper you made earlier
+cash ls       # safe warning (binary)
+```
+
 ## Notes & portability
 
 - Uses `$PREFIX` if set (Termux). Otherwise uses `/usr/local/bin`.
@@ -66,7 +188,3 @@ Examples:
 - Add support for a configurable editor via `$EDITOR` or an environment variable.
 - Add an option to choose shebang (e.g., `#!/usr/bin/env bash` vs an explicit interpreter path).
 - Add a `--dry-run` or `--no-chmod` flag.
-
-## License
-
-No license specified. Add a LICENSE file if you want to make the repo public with a specific license.
